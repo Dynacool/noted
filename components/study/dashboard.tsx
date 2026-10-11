@@ -157,6 +157,10 @@ export function Dashboard({
           </span>
         </div>
       </section>
+      {store.attempts.length > 0 && (() => {
+        const recent = store.attempts[store.attempts.length - 1];
+        return <section className="panel continue-study"><div><span className="eyebrow">CONTINUE STUDYING</span><h2>{recent.config.name || subjects.find(s => s.id === recent.questions[0]?.subject)?.name || "Your latest topics"}</h2><p className="small muted">Return to your recent quiz topics with a fresh practice set.</p></div><button className="primary" onClick={() => onBuild({ ...recent.config, worldMode: store.worldMode })}>Practice again<ArrowRight size={16} /></button></section>;
+      })()}
       <div className="stats-grid">
         {[
           {
@@ -286,8 +290,8 @@ export function Dashboard({
       <section className="subjects-section">
         <div className="section-label">
           <div>
-            <h2>A world of things to learn</h2>
-            <p className="muted small">Choose a subject. Find your stride.</p>
+            <h2>Your subjects</h2>
+            <p className="muted small">Course notes and practice, organized by unit.</p>
           </div>
           <button className="text-button" onClick={() => onPage("Subjects")}>
             Explore all subjects
@@ -357,7 +361,7 @@ export function Dashboard({
           ) : (
             <div className="empty compact">
               <BookOpen size={27} />
-              <h3>Your journey, recorded here.</h3>
+              <h3>No completed quizzes yet</h3>
               <p>Finish a practice session to see your results.</p>
             </div>
           )}
@@ -534,7 +538,7 @@ export function Analytics({
       </div>
       <div className="dashboard-middle">
         <section className="panel">
-          <h2>Your study rhythm</h2>
+          <h2>Weekly study time</h2>
           <ActivityChart store={store} />
         </section>
         <section className="panel">

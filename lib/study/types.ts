@@ -102,7 +102,9 @@ export type Store = {
   completedLessons?: string[];
   gradingHistory?: GradingRecord[];
 };
+export type GradingStrictness = "lenient" | "standard" | "strict";
 export type CriterionFeedback = {
+  explanation?: string;
   criterion: string;
   points: number;
   max: number;
@@ -111,6 +113,12 @@ export type CriterionFeedback = {
   suggestion: string;
 };
 export type GradingEstimate = {
+  strictness?: GradingStrictness;
+  totalScore?: number;
+  maxScore?: number;
+  strengths?: string[];
+  errors?: string[];
+  uncertainties?: string[];
   label: string;
   provider: "gemini" | "manual";
   model?: string;

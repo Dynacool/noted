@@ -177,11 +177,16 @@ try {
     .getByRole("status")
     .getByText("Question saved.", { exact: true })
     .waitFor();
+  await page.route("**/api/grade", route => route.fulfill({ json: route.request().method() === "GET" ? { available: false, reason: "No server-side Gemini API key is configured." } : { error: "Grading is unavailable." }, status: route.request().method() === "GET" ? 200 : 503 }));
   await nav("FRQ Grading");
   await page
     .getByText("No server-side Gemini API key", { exact: false })
     .first()
     .waitFor();
+  for (const mode of ["Lenient", "Standard", "Strict", "Standard"]) {
+    await page.getByRole("radio", { name: mode, exact: false }).check();
+    assert.equal(await page.getByRole("radio", { name: mode, exact: false }).isChecked(), true);
+  }
   await page
     .locator("textarea")
     .fill(
@@ -197,7 +202,10 @@ try {
   await page.getByRole("button", { name: "Save rubric review" }).click();
   await page.getByRole("button", { name: "Review saved" }).waitFor();
   const status = await page.request.get(url + "/api/grade");
-  assert.equal((await status.json()).available, false);
+  const availability = await status.json();
+  assert.equal(typeof availability.available, "boolean");
+  assert.ok(!JSON.stringify(availability).includes("GEMINI_API_KEY="));
+  if (!availability.available) {
   const fallback = await page.request.post(url + "/api/grade", {
     data: {
       question: {
@@ -216,6 +224,8 @@ try {
     },
   });
   assert.equal(fallback.status(), 503);
+  }
+  await page.unroute("**/api/grade");
   // Mock the adapter boundary to verify the successful AI UI and immutable revisions.
   await nav("Dashboard");
   await page.route("**/api/grade", async (route) => {
@@ -224,6 +234,7 @@ try {
       return;
     }
     const body = route.request().postDataJSON();
+    assert.ok(["lenient", "standard", "strict"].includes(body.strictness));
     const breakdown = body.question.rubric.map((r, i) => ({
       criterion: r.criterion,
       points: i === 0 ? 1 : 0,
@@ -237,6 +248,7 @@ try {
         label: "Gemini estimate — unofficial, not an AP score",
         provider: "gemini",
         model: "test-only",
+        strictness: body.strictness,
         points: breakdown.map((r) => r.points),
         breakdown,
         feedback: "Relevant evidence with room to improve.",
@@ -247,6 +259,7 @@ try {
   });
   await nav("FRQ Grading");
   await page.getByRole("button", { name: "Get Gemini estimate" }).waitFor();
+  await page.getByRole("radio", { name: "Strict", exact: false }).check();
   await page
     .getByLabel("Your response", { exact: true })
     .fill("Seasonal monsoon winds made travel predictable.");
@@ -258,7 +271,9 @@ try {
     JSON.parse(localStorage.getItem("studycraft.v1")),
   );
   assert.equal(aiState.gradingHistory.at(-1).estimate.provider, "gemini");
+  assert.equal(aiState.gradingHistory.at(-1).estimate.strictness, "strict");
   const previous = aiState.gradingHistory.at(-1).id;
+  await page.getByRole("radio", { name: "Lenient", exact: false }).check();
   await page
     .getByLabel("Your response", { exact: true })
     .fill(
@@ -270,6 +285,8 @@ try {
     JSON.parse(localStorage.getItem("studycraft.v1")),
   );
   assert.equal(aiState.gradingHistory.at(-1).previousId, previous);
+  assert.equal(aiState.gradingHistory.at(-1).estimate.strictness, "lenient");
+  assert.equal(aiState.gradingHistory.find(r => r.id === previous).estimate.strictness, "strict");
   assert.ok(
     aiState.attempts.at(-1).results.every((r) => r.gradingMethod === "gemini"),
   );

@@ -37,6 +37,7 @@ export function Courses({
     [unitId, setUnitId] = useState(""),
     [query, setQuery] = useState(""),
     [topic, setTopic] = useState("");
+  const [unitSearch, setUnitSearch] = useState("");
   const s = subjects.find((s) => s.id === subjectId);
   const lessons = unitLessons.filter(
     (l) =>
@@ -250,10 +251,13 @@ export function Courses({
       {s.framework?.note && (
         <p className="framework-note">{s.framework.note}</p>
       )}
+      {!lesson && <div className="course-toolbar"><div className="search-input"><Search size={18} /><input aria-label="Search units and topics" placeholder="Search units and topics" value={unitSearch} onChange={e => setUnitSearch(e.target.value)} /></div></div>}
       {!lesson ? (
         <div className="unit-grid">
+          {unitSearch && !lessons.some(l => `${l.title} ${l.overview} ${l.topics.map(t => t.name).join(" ")}`.toLowerCase().includes(unitSearch.toLowerCase())) && <p className="muted">No units match this search.</p>}
           {lessons.length ? (
-            lessons.map((l, i) => {
+            lessons.filter(l => `${l.title} ${l.overview} ${l.topics.map(t => t.name).join(" ")}`.toLowerCase().includes(unitSearch.toLowerCase())).map((l) => {
+              const i = lessons.indexOf(l);
               const completed = store.completedLessons?.includes(l.id);
               const count = bank.filter(
                 (q) =>
@@ -285,14 +289,13 @@ export function Courses({
                   </div>
                   <h3>{l.title}</h3>
                   <p>{l.overview}</p>
-                  <div className="unit-topics">
-                    {l.topics.slice(0, 4).map((t) => (
+                  <details className="unit-expansion"><summary>Explore {l.topics.length} topics</summary><div className="unit-topics">
+                    {l.topics.map((t) => (
                       <span key={t.name}>{t.name}</span>
                     ))}
-                    {l.topics.length > 4 && (
-                      <span>+{l.topics.length - 4} more</span>
-                    )}
+
                   </div>
+                  </details>
                   <div className="unit-card-footer">
                     <span className="small muted">
                       {count} questions · {l.topics.length} topics

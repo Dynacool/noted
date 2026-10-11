@@ -5,6 +5,7 @@ import { grade } from "../../lib/study/engine";
 import { worldVisible } from "../../lib/study/course-mapping";
 import {
   defaultConfig,
+  type GradingStrictness,
   type GradingEstimate,
   type GradingRecord,
   type Question,
@@ -54,6 +55,7 @@ export function FRQ({
     [pendingId, setPendingId] = useState(""),
     [previousId, setPreviousId] = useState(""),
     [subject, setSubject] = useState("");
+  const [strictness, setStrictness] = useState<GradingStrictness>("standard");
   const controller = useRef<AbortController | null>(null);
   useEffect(() => {
     const abort = new AbortController();
@@ -80,7 +82,7 @@ export function FRQ({
       controller.current?.abort();
     };
   }, []);
-  const q = written.find((q) => q.id === id) ?? written[0];
+  const q = (store.gradingHistory ?? []).find(r => r.id === previousId)?.question ?? written.find((q) => q.id === id) ?? written[0];
   const clear = () => {
     setPoints([]);
     setEstimate(null);
@@ -88,6 +90,7 @@ export function FRQ({
     setError("");
   };
   const open = (record: GradingRecord) => {
+    setStrictness(record.estimate.strictness ?? "standard");
     setId(record.question.id);
     setSubject("");
     setResponse(record.response);
@@ -109,6 +112,7 @@ export function FRQ({
   const max = q.rubric!.reduce((s, r) => s + r.points, 0),
     score = points.reduce((s, n) => s + n, 0);
   const manualEstimate = (): GradingEstimate => ({
+    strictness,
     label: "Manual rubric self-assessment",
     provider: "manual",
     points: q.rubric!.map((_, i) => points[i] ?? 0),
@@ -308,6 +312,16 @@ export function FRQ({
               </div>
             </details>
           )}
+          <fieldset className="strictness-control" disabled={busy}>
+            <legend>Grading strictness</legend>
+            {([ ["lenient", "Lenient", "Encouraging practice"], ["standard", "Standard", "AP exam style"], ["strict", "Strict", "Explicit, rigorous reasoning"] ] as const).map(([value, title, description]) => (
+              <label key={value} className={strictness === value ? "strictness-option selected" : "strictness-option"}>
+                <input type="radio" name="strictness" value={value} checked={strictness === value} onChange={() => setStrictness(value)} />
+                <span><strong>{title}</strong><small>{description}</small></span>
+              </label>
+            ))}
+            <p className="small muted">Interpretation changes; the rubric and maximum score stay the same. Missing requirements never earn credit.</p>
+          </fieldset>
           <button
             className="primary mt"
             disabled={!response.trim() || busy}
@@ -321,6 +335,9 @@ export function FRQ({
                   ?.scrollIntoView({ behavior: "smooth", block: "start" });
                 return;
               }
+              setEstimate(null);
+              setPoints([]);
+              setSaved(false);
               setBusy(true);
               setError("");
               controller.current = new AbortController();
@@ -329,7 +346,7 @@ export function FRQ({
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
                   signal: controller.current.signal,
-                  body: JSON.stringify({ question: q, response }),
+                  body: JSON.stringify({ question: q, response, strictness }),
                 });
                 const d = (await r.json()) as GradingEstimate & {
                   error?: string;
@@ -375,8 +392,11 @@ export function FRQ({
           )}
           {estimate && (
             <div className="answer-feedback">
-              <strong>{estimate.label}</strong>
+              <div className="grading-score"><strong>{score}/{max}</strong><span>{estimate.strictness ?? "standard"} ? {estimate.label}</span></div>
+              <p className="small muted">AI-generated scores are estimates, not official College Board grades.</p>
               <p>{estimate.feedback}</p>
+              {([ ["Strengths", estimate.strengths], ["Factual or conceptual errors", estimate.errors], ["Grading uncertainty", estimate.uncertainties] ] as const).map(([title, items]) => items && items.length > 0 && <div key={title}><h3>{title}</h3><ul>{items.map((item, i) => <li key={i}>{item}</li>)}</ul></div>)}
+              <details><summary>Original response for this review</summary><div className="response-preview"><MathText text={response} /></div></details>
               <h3>Specific improvements</h3>
               <div className="lesson-prose">
                 <MathText text={estimate.improvements} />
@@ -390,6 +410,7 @@ export function FRQ({
         </section>
         <aside className="panel rubric-panel">
           <span className="eyebrow">QUESTION-SPECIFIC RUBRIC</span>
+          <p className="small muted">{q.source === "Custom" || q.source === "Imported" ? "Teacher / user supplied rubric." : "Independently authored study rubric; not an official College Board scoring guide."}</p>
           <h2>
             {score} <span className="muted">/ {max} points</span>
           </h2>
@@ -406,7 +427,9 @@ export function FRQ({
                   <strong>{r.criterion}</strong>
                   <p>{r.guidance}</p>
                   {feedback && (
-                    <div className="criterion-feedback">
+                    <details className="criterion-feedback" open={feedback.points < feedback.max}>
+                      <summary>{feedback.points}/{feedback.max} points ? Scoring explanation</summary>
+                      <p>{feedback.explanation ?? "See evidence and missing requirements below."}</p>
                       <p>
                         <b>Evidence:</b>{" "}
                         {feedback.evidence ||
@@ -420,7 +443,7 @@ export function FRQ({
                       <p>
                         <b>Improve:</b> {feedback.suggestion}
                       </p>
-                    </div>
+                    </details>
                   )}
                 </div>
                 <select

@@ -530,3 +530,41 @@
     font-size: 12px;
   }
 }
+
+/* A quieter reading surface shared by the existing study tools. */
+.app-shell { --bg: #f6f7f9; --ink: #26352f; --muted: #626e68; --line: #dde3df; --soft: #f0f3f1; font-family: "Segoe UI", system-ui, sans-serif; }
+.app-shell.dark { --bg: #151c1a; --surface: #1e2723; --sidebar: #19221e; --ink: #e6ece8; --muted: #adbbb2; --line: #36443c; --soft: #27332c; --green: #9ccbb0; --highlight: #2b3b31; }
+.panel { border-radius: 8px; box-shadow: 0 1px 2px rgb(20 40 30 / 3%); }
+.nav-item { font-size: 14px; border-radius: 6px; }
+.stat-icon { color: var(--green); background: var(--soft); }
+.stat-card > strong { font-variant-numeric: tabular-nums; }
+.course-card:hover { transform: none; }
+.frq-grid h2 { font-family: inherit; font-weight: 600; font-size: 24px; }
+.frq-grid textarea { min-height: 340px; line-height: 1.75; padding: 16px; resize: vertical; }
+.frq-prompt { line-height: 1.8; padding: 18px; border-left: 3px solid var(--green); background: var(--soft); }
+.strictness-control { border: 0; padding: 0; margin: 24px 0 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.strictness-control legend { font-size: 14px; font-weight: 600; margin-bottom: 10px; }
+.strictness-option { display: flex; align-items: start; gap: 8px; border: 1px solid var(--line); border-radius: 6px; padding: 12px; cursor: pointer; margin: 0; }
+.strictness-option.selected { background: var(--highlight); border-color: var(--green); }
+.strictness-option input { width: auto; accent-color: var(--green); margin-top: 4px; }
+.strictness-option small { display: block; font-size: 12px; color: var(--muted); line-height: 1.5; margin-top: 4px; }
+.strictness-control > p { grid-column: 1 / -1; }
+.grading-score { display: flex; align-items: center; gap: 16px; margin-bottom: 12px; }
+.grading-score strong { font-size: 32px; font-variant-numeric: tabular-nums; }
+.grading-score span { font-size: 13px; text-transform: capitalize; }
+.answer-feedback h3 { margin: 20px 0 8px; }
+.criterion-feedback summary { font-size: 13px; color: var(--green); }
+.criterion-feedback p { overflow-wrap: anywhere; }
+.continue-study { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.continue-study h2 { margin: 8px 0; }
+.unit-expansion { margin: 18px 0; }
+.unit-expansion summary { font-size: 14px; font-weight: 500; cursor: pointer; }
+input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+@media (max-width: 700px) { .strictness-control { grid-template-columns: 1fr; } .strictness-option { align-items: center; } .continue-study { align-items: stretch; flex-direction: column; } .frq-grid textarea { min-height: 280px; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; } }
+
+.app-shell h1, .focus-panel h3, .sidebar-note strong { font-family: inherit; font-weight: 600; }
+.app-shell .eyebrow, .app-shell .sidebar-caption { font-size: 11px; letter-spacing: .09em; }
+.app-shell .small, .stat-top, .stat-card p, .focus-panel p, .session-row p { font-size: 13px; line-height: 1.6; }
+.app-shell .tag { font-size: 12px; border-radius: 4px; }
+.primary, .secondary { min-height: 40px; font-size: 14px; }

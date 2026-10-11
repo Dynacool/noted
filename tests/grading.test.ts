@@ -1,3 +1,4 @@
+import { normalizeStore, emptyStore } from "../lib/study/storage";
 import assert from "node:assert/strict";
 import {
   configuredProvider,
@@ -21,12 +22,17 @@ const response = "Seasonal monsoon winds made travel predictable.";
 const payload = {
   criteria: [
     {
+      criterion: "Mechanism",
+      explanation: "The answer identifies winds but does not explain voyage planning.",
       points: 1,
       evidence: "Seasonal monsoon winds",
       missing: "Explain how merchants planned voyages.",
       suggestion: "Connect the seasonal reversal to voyage timing.",
     },
   ],
+  strengths: ["Identifies a relevant mechanism."],
+  errors: [],
+  uncertainties: [],
   feedback: "Relevant mechanism, incomplete explanation.",
   improvements: "Explain how traders timed departures.",
   example:
@@ -73,6 +79,12 @@ try {
   assert.deepEqual(estimate.points, [1]);
   assert.equal(estimate.breakdown[0].max, 2);
   assert.equal(estimate.provider, "gemini");
+  const history = { ...emptyStore, gradingHistory: [{ id: "review-1", date: new Date().toISOString(), question: q, response, estimate }] };
+  const restored = normalizeStore(JSON.parse(JSON.stringify(history)));
+  assert.equal(restored.gradingHistory![0].estimate.strictness, "standard");
+  assert.equal(restored.gradingHistory![0].response, response);
+  assert.throws(() => normalizeStore({ ...history, gradingHistory: [{ ...history.gradingHistory[0], estimate: { ...estimate, strictness: "invalid" } }] }));
+  assert.throws(() => normalizeStore({ ...history, gradingHistory: [{ ...history.gradingHistory[0], estimate: { ...estimate, totalScore: 100 } }] }));
   assert.throws(
     () =>
       validateEstimate(
@@ -116,6 +128,28 @@ try {
       ),
     /incomplete/,
   );
+  for (const strictness of ["lenient", "standard", "strict"] as const) {
+    for (const points of [0, 1, 2]) {
+      const studentAnswer = ["The ocean had no effect on trade.", "Seasonal monsoon winds made travel predictable.", "Seasonal monsoon winds reversed direction, so merchants planned outward departures and return voyages in opposite seasons."][points];
+      const example = { ...payload, criteria: [{ ...payload.criteria[0], points, evidence: points ? "Seasonal monsoon winds" : "", missing: points < 2 ? "Voyage reasoning is missing." : "" }] };
+      const result = validateEstimate(example, q, studentAnswer, "test", strictness);
+      assert.equal(result.totalScore, points);
+      assert.equal(result.maxScore, 2);
+    }
+  }
+  // Borderline wording does not manufacture the missing voyage-planning point.
+  for (const strictness of ["lenient", "standard", "strict"] as const) {
+    const answer = "Seasonal monsoon winds helped trade somehow.";
+    const result = validateEstimate(payload, q, answer, "test", strictness);
+    assert.equal(result.totalScore, 1);
+    assert.ok(result.breakdown[0].missing);
+  }
+  assert.throws(() => validateEstimate({ ...payload, criteria: [{ ...payload.criteria[0], points: 2 }] }, q, response, "test"), /missing rubric/);
+  const fullCreditNoSuggestion = validateEstimate({ ...payload, criteria: [{ ...payload.criteria[0], points: 2, missing: "", suggestion: "" }] }, q, response, "test");
+  assert.equal(fullCreditNoSuggestion.totalScore, 2);
+  assert.ok(fullCreditNoSuggestion.breakdown[0].suggestion);
+  assert.throws(() => validateEstimate({ ...payload, criteria: [{ ...payload.criteria[0], suggestion: "" }] }, q, response, "test"));
+  assert.throws(() => validateEstimate({ ...payload, uncertainties: "unknown" }, q, response, "test"), /structured/);
   process.env.GEMINI_API_KEY = "test-only-key";
   process.env.GEMINI_MODEL = "gemini-test";
   globalThis.fetch = async (input, options) => {
@@ -128,6 +162,9 @@ try {
       "test-only-key",
     );
     const body = JSON.parse(options?.body as string);
+    const submission = JSON.parse(body.contents[0].parts[0].text);
+    assert.ok(["lenient", "standard", "strict"].includes(submission.strictness));
+    assert.ok(body.systemInstruction.parts[0].text.includes(submission.strictness === "lenient" ? "Encouraging" : submission.strictness === "strict" ? "Rigorous" : "AP exam style"));
     assert.ok(!JSON.stringify(body).includes("test-only-key"));
     assert.equal(
       body.generationConfig.responseFormat.text.mimeType,
@@ -146,6 +183,13 @@ try {
     (await configuredProvider()!.grade(q, response)).points,
     [1],
   );
+  for (const strictness of ["lenient", "standard", "strict"] as const) {
+    const result = await configuredProvider()!.grade(q, response, strictness);
+    assert.equal(result.strictness, strictness);
+    assert.equal(result.maxScore, 2);
+    assert.equal(result.totalScore, 1);
+  }
+  assert.equal((await POST(request({ question: q, response, strictness: "arbitrary" }))).status, 400);
   for (let i = 0; i < 4; i++)
     assert.equal(
       (await POST(request({ question: q, response }, "limit-test"))).status,
@@ -154,6 +198,8 @@ try {
   const limited = await POST(request({ question: q, response }, "limit-test"));
   assert.equal(limited.status, 429);
   assert.equal(limited.headers.get("Retry-After"), "60");
+  globalThis.fetch = async () => new Response("", { status: 402 });
+  await assert.rejects(configuredProvider()!.grade(q, response), /credits or quota/);
   globalThis.fetch = async () => new Response("", { status: 429 });
   await assert.rejects(
     configuredProvider()!.grade(q, response),

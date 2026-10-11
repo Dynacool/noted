@@ -1,3 +1,4 @@
+import { withGradingEnvironment } from "../lib/study/runtime.server";
 import handler from "vinext/server/fetch-handler";
 import { runWithConnectorBinding } from "../lib/connector-context";
 import type { ConnectorBinding } from "../lib/connector-contract.mjs";
@@ -23,6 +24,6 @@ export default {
         },
       };
     }
-    return runWithConnectorBinding(binding, () => handler.fetch(request, env, ctx));
+    return withGradingEnvironment(env, () => runWithConnectorBinding(binding, () => handler.fetch(request, env, ctx)));
   },
 };

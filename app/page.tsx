@@ -50,13 +50,13 @@ const navigation = [
   { name: "Progress & Analytics", icon: ChartNoAxesCombined },
 ];
 const descriptions: Record<string, string> = {
-  Dashboard: "A little progress, every day.",
-  Subjects: "Explore your subjects. Build your understanding.",
-  "Quiz Builder": "Your goals. Your topics. Your kind of practice.",
-  Practice: "Make space for focused learning.",
-  "Question Banks": "A growing library of things worth learning.",
-  "FRQ Grading": "Better reasoning starts with thoughtful feedback.",
-  "Practice Exams": "Prepare with purpose. Practice under pressure.",
+  Dashboard: "Your recent practice, progress, and next steps.",
+  Subjects: "Browse course notes and practice by unit.",
+  "Quiz Builder": "Choose topics and build a focused practice set.",
+  Practice: "Work through questions and review your reasoning.",
+  "Question Banks": "Browse, organize, and create study questions.",
+  "FRQ Grading": "Write a response and review it against the scoring rubric.",
+  "Practice Exams": "Practice a timed subject or cumulative assessment.",
   "Progress & Analytics": "See how far you’ve come, and where to go next.",
   Settings: "Make this space work for you.",
 };
@@ -206,9 +206,7 @@ export default function Home() {
             >
               <n.icon size={19} />
               <span>{n.name}</span>
-              {n.name === "Quiz Builder" && (
-                <span className="nav-new">NEW</span>
-              )}
+
             </button>
           ))}
         </nav>
@@ -238,7 +236,7 @@ export default function Home() {
             <div className="avatar">Y</div>
             <div>
               <strong>Your workspace</strong>
-              <span>Curiosity looks good on you</span>
+              <span>Progress saved on this device</span>
             </div>
             <span className="online-dot" />
           </div>
@@ -615,9 +613,9 @@ export default function Home() {
           )}
           <footer className="page-footer">
             <span>
-              <Sprout size={14} /> Built for steady progress.
+              <Sprout size={14} /> Noted ? Study workspace
             </span>
-            <span>Your pace. Your possibility.</span>
+            <span>Your data stays in this browser.</span>
           </footer>
         </main>
       </div>

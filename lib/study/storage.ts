@@ -171,6 +171,7 @@ export function normalizeStore(value: unknown): Store {
         typeof r.response !== "string" ||
         !r.question?.rubric ||
         !r.estimate ||
+        (r.estimate.strictness !== undefined && !["lenient", "standard", "strict"].includes(r.estimate.strictness)) ||
         !["gemini", "manual"].includes(r.estimate.provider) ||
         !Array.isArray(r.estimate.breakdown) ||
         !Array.isArray(r.estimate.points) ||
@@ -180,6 +181,11 @@ export function normalizeStore(value: unknown): Store {
         typeof r.estimate.example !== "string"
       )
         fail();
+      for (const items of [r.estimate.strengths, r.estimate.errors, r.estimate.uncertainties]) {
+        if (items !== undefined && (!Array.isArray(items) || items.some(item => typeof item !== "string"))) fail();
+      }
+      if ((r.estimate.totalScore !== undefined && r.estimate.totalScore !== r.estimate.points.reduce((sum, point) => sum + point, 0)) ||
+          (r.estimate.maxScore !== undefined && r.estimate.maxScore !== r.question.rubric!.reduce((sum, row) => sum + row.points, 0))) fail();
       validateQuestions([r.question]);
       if (
         typeof r.date !== "string" ||
@@ -191,8 +197,10 @@ export function normalizeStore(value: unknown): Store {
             !Number.isInteger(p) || p < 0 || p > r.question.rubric![i].points,
         ) ||
         r.estimate.breakdown.some(
-          (b) =>
+          (b, i) =>
             !b ||
+            b.points !== r.estimate.points[i] || b.max !== r.question.rubric![i].points ||
+            (b.explanation !== undefined && typeof b.explanation !== "string") ||
             ["criterion", "evidence", "missing", "suggestion"].some(
               (k) => typeof b[k as keyof typeof b] !== "string",
             ) ||
