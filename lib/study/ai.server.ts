@@ -159,7 +159,7 @@ export function validateEstimate(
 // Server-only: this file is never imported as a value by a client component.
 // REST contract: https://ai.google.dev/api/generate-content
 export function configuredProvider(env: { GEMINI_API_KEY?: string; GEMINI_MODEL?: string } = { GEMINI_API_KEY: process.env.GEMINI_API_KEY, GEMINI_MODEL: process.env.GEMINI_MODEL }): GradingProvider | null {
-  const key = env.GEMINI_API_KEY;
+  const key = env.GEMINI_API_KEY?.trim();
   if (!key?.trim()) return null;
   const model = env.GEMINI_MODEL?.trim() || "gemini-3.8-flash";
   if (!/^gemini-[a-z0-9.-]+$/.test(model))
@@ -233,7 +233,18 @@ export function configuredProvider(env: { GEMINI_API_KEY?: string; GEMINI_MODEL?
           "Gemini could not authenticate. Check the server-side API key; manual review is available.",
         );
       if (result.status === 404) throw new GradingError("The configured Gemini model is unavailable. Check GEMINI_MODEL and this project's model access.");
-      if (result.status === 400) throw new GradingError("Gemini rejected the request configuration (HTTP 400). Check the server API key, model access, and supported generation settings.");
+      if (result.status === 400) {
+        // Classify provider errors without exposing raw messages or credentials.
+        const error = await result.json().catch(() => null) as {
+          error?: { message?: string; details?: { reason?: string }[] };
+        } | null;
+        const reasons = error?.error?.details?.map(detail => detail.reason) ?? [];
+        if (reasons.includes("API_KEY_INVALID") || reasons.includes("API_KEY_EXPIRED"))
+          throw new GradingError("Gemini rejected the server API key (HTTP 400). Replace GEMINI_API_KEY with a valid Google AI Studio key and restart or redeploy the server.");
+        if (/billing|prepayment|credits|paid tier/i.test(error?.error?.message ?? ""))
+          throw new GradingError("Gemini requires project billing or available credits (HTTP 400). Check Google AI Studio billing and project limits. Your response is preserved; manual review is available.");
+        throw new GradingError("Gemini rejected the request configuration (HTTP 400). Check GEMINI_MODEL and supported generation settings. Your response is preserved; manual review is available.");
+      }
       if (!result.ok)
         throw new GradingError(
           `Gemini could not complete grading (HTTP ${result.status}). Please retry or use manual review.`,

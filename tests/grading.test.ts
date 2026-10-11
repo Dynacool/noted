@@ -150,7 +150,7 @@ try {
   assert.ok(fullCreditNoSuggestion.breakdown[0].suggestion);
   assert.throws(() => validateEstimate({ ...payload, criteria: [{ ...payload.criteria[0], suggestion: "" }] }, q, response, "test"));
   assert.throws(() => validateEstimate({ ...payload, uncertainties: "unknown" }, q, response, "test"), /structured/);
-  process.env.GEMINI_API_KEY = "test-only-key";
+  process.env.GEMINI_API_KEY = "  test-only-key  ";
   process.env.GEMINI_MODEL = "gemini-test";
   globalThis.fetch = async (input, options) => {
     assert.equal(
@@ -170,6 +170,8 @@ try {
       body.generationConfig.responseFormat.text.mimeType,
       "APPLICATION_JSON",
     );
+    assert.equal(body.generationConfig.responseFormat.text.schema.type, "object");
+    assert.ok(body.generationConfig.responseFormat.text.schema.required.includes("criteria"));
     return Response.json({
       candidates: [
         {
@@ -200,6 +202,12 @@ try {
   assert.equal(limited.headers.get("Retry-After"), "60");
   globalThis.fetch = async () => new Response("", { status: 402 });
   await assert.rejects(configuredProvider()!.grade(q, response), /credits or quota/);
+  globalThis.fetch = async () => Response.json({ error: { details: [{ reason: "API_KEY_INVALID" }], message: "Secret provider detail" } }, { status: 400 });
+  await assert.rejects(configuredProvider()!.grade(q, response), /rejected the server API key/);
+  globalThis.fetch = async () => Response.json({ error: { message: "Requires paid tier billing" } }, { status: 400 });
+  await assert.rejects(configuredProvider()!.grade(q, response), /project billing/);
+  globalThis.fetch = async () => new Response("not JSON", { status: 400 });
+  await assert.rejects(configuredProvider()!.grade(q, response), /request configuration/);
   globalThis.fetch = async () => new Response("", { status: 429 });
   await assert.rejects(
     configuredProvider()!.grade(q, response),
