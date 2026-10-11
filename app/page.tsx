@@ -21,8 +21,10 @@ import {
   Repeat2,
   Download,
 } from "lucide-react";
-import { subjects as coreSubjects } from "../lib/study/subjects";
-import { bank as coreBank } from "../lib/study/bank";
+import { courseSubjects, questionBank as coreBank } from "../lib/study/catalog";
+import { Exams } from "../components/study/exams";
+import { Courses } from "../components/study/courses";
+
 import {
   defaultConfig,
   type Attempt,
@@ -30,7 +32,7 @@ import {
   type Question,
   type Store,
 } from "../lib/study/types";
-import { emptyStore, repository } from "../lib/study/storage";
+import { emptyStore, repository, normalizeStore } from "../lib/study/storage";
 import { generate, matching, accuracy } from "../lib/study/engine";
 import { Builder } from "../components/study/builder";
 import { Practice, Review } from "../components/study/practice";
@@ -73,7 +75,8 @@ export default function Home() {
     [builderConfig, setBuilderConfig] = useState<Config>(defaultConfig),
     [builderKey, setBuilderKey] = useState(0),
     [notifications, setNotifications] = useState(false),
-    [reset, setReset] = useState(false);
+    [reset, setReset] = useState(false),
+    [restore, setRestore] = useState<Store | null>(null);
   // Browser storage must be read after hydration; the first render remains server-safe.
   useEffect(() => {
     try {
@@ -117,7 +120,7 @@ export default function Home() {
     ),
     ...store.custom,
   ];
-  const knownSubjects = [...coreSubjects, ...store.subjects];
+  const knownSubjects = [...courseSubjects(store.worldMode), ...store.subjects];
   // Imported banks can introduce subjects without a separate setup step.
   const importedSubjects = [...new Set(bank.map((q) => q.subject))]
     .filter((id) => !knownSubjects.some((s) => s.id === id))
@@ -142,13 +145,19 @@ export default function Home() {
     }));
   const subjects = [...knownSubjects, ...importedSubjects];
   const build = (c: Config) => {
-    setBuilderConfig(c);
+    setBuilderConfig({
+      ...c,
+      worldMode: c.worldMode ?? store.worldMode ?? "standard",
+    });
     setBuilderKey((k) => k + 1);
     go("Quiz Builder");
   };
   const start = (c: Config) => {
     try {
-      const questions = generate(matching(bank, c, store.attempts), c.count);
+      const questions = generate(
+        matching(bank, c, store.attempts, undefined, store.flags),
+        c.count,
+      );
       setActive({ questions, config: c });
       setReview(null);
       go("Practice");
@@ -173,10 +182,10 @@ export default function Home() {
       <aside className="sidebar">
         <a className="brand" href="#Dashboard" onClick={() => go("Dashboard")}>
           <span className="brand-mark">
-            <Sprout size={25} />
+            <BookOpen size={25} />
           </span>
           <span>
-            studycraft<span className="brand-dot">.</span>
+            Noted<span className="brand-dot">.</span>
           </span>
         </a>
         <button
@@ -316,12 +325,10 @@ export default function Home() {
             <div>
               <span className="eyebrow">
                 {page === "Dashboard"
-                  ? "LET’S MAKE TODAY COUNT"
+                  ? "NOTED / OVERVIEW"
                   : "YOUR LEARNING, INTENTIONALLY"}
               </span>
-              <h1>
-                {page === "Dashboard" ? "Welcome to your next chapter." : page}
-              </h1>
+              <h1>{page === "Dashboard" ? "Your study workspace" : page}</h1>
               <p>{descriptions[page]}</p>
             </div>
             {page === "Dashboard" && (
@@ -347,6 +354,7 @@ export default function Home() {
             <>
               {page === "Dashboard" && (
                 <Dashboard
+                  bank={bank}
                   store={store}
                   subjects={subjects}
                   onSave={save}
@@ -365,8 +373,8 @@ export default function Home() {
                   initial={builderConfig}
                 />
               )}
-              {page === "Practice" &&
-                (active ? (
+              {active && (
+                <div hidden={page !== "Practice"}>
                   <Practice
                     key={
                       active.questions.map((q) => q.id).join(",") +
@@ -378,7 +386,11 @@ export default function Home() {
                     onSave={save}
                     onFinish={finish}
                   />
-                ) : review ? (
+                </div>
+              )}
+              {page === "Practice" &&
+                !active &&
+                (review ? (
                   <Review
                     attempt={review}
                     onRetry={(questions) => {
@@ -450,6 +462,7 @@ export default function Home() {
               )}
               {page === "Progress & Analytics" && (
                 <Analytics
+                  bank={bank}
                   store={store}
                   subjects={subjects}
                   onBuild={build}
@@ -461,148 +474,20 @@ export default function Home() {
                 />
               )}
               {page === "Subjects" && (
-                <div className="subject-detail-grid">
-                  {subjects.map((s) => (
-                    <section className="panel subject-detail" key={s.id}>
-                      <div className="section-label">
-                        <span
-                          className="subject-icon"
-                          style={{ background: s.color + "18", color: s.color }}
-                        >
-                          {s.short}
-                        </span>
-                        <span className="tag">
-                          {bank.filter((q) => q.subject === s.id).length}{" "}
-                          questions
-                        </span>
-                      </div>
-                      <h2>{s.name}</h2>
-                      <p className="muted">{s.description}</p>
-                      <details>
-                        <summary>{s.units.length} organized units</summary>
-                        {s.units.map((u) => (
-                          <div className="unit-row" key={u.name}>
-                            <strong>{u.name}</strong>
-                            <p>{u.topics.join(" · ")}</p>
-                            <button
-                              className="text-button"
-                              onClick={() =>
-                                build({
-                                  ...defaultConfig,
-                                  subjects: [s.id],
-                                  units: [u.name],
-                                  count: 5,
-                                })
-                              }
-                            >
-                              Practice unit
-                              <ArrowRight size={13} />
-                            </button>
-                          </div>
-                        ))}
-                      </details>
-                      <button
-                        className="secondary full"
-                        onClick={() =>
-                          build({ ...defaultConfig, subjects: [s.id] })
-                        }
-                      >
-                        Explore {s.name}
-                        <ArrowRight size={16} />
-                      </button>
-                    </section>
-                  ))}
-                </div>
+                <Courses
+                  subjects={subjects}
+                  bank={bank}
+                  store={store}
+                  onSave={save}
+                  onBuild={build}
+                />
               )}
               {page === "Practice Exams" && (
-                <>
-                  <div className="notice">
-                    Short original practice sets, not official or full-length
-                    exams. Customize formats, topics, and time limits before
-                    starting.
-                  </div>
-                  <div className="exam-grid">
-                    {[
-                      {
-                        name: "SAT skill check",
-                        subject: "sat",
-                        time: 15,
-                        description:
-                          "A focused mix of math and reading & writing.",
-                        types: [],
-                      },
-                      {
-                        name: "AMC problem solving",
-                        subject: "amc",
-                        time: 25,
-                        description:
-                          "Creative problems across four competition areas.",
-                        types: [],
-                      },
-                      {
-                        name: "AP World unit practice",
-                        subject: "world",
-                        time: 15,
-                        description:
-                          "Historical reasoning through original multiple-choice questions.",
-                        types: ["MCQ"],
-                      },
-                      {
-                        name: "AP Statistics check-in",
-                        subject: "stats",
-                        time: 20,
-                        description:
-                          "Calculations, interpretation, and statistical thinking.",
-                        types: [],
-                      },
-                      {
-                        name: "Java fundamentals",
-                        subject: "csa",
-                        time: 20,
-                        description:
-                          "Expressions, loops, arrays, and algorithms.",
-                        types: ["MCQ", "Numerical"],
-                      },
-                      {
-                        name: "Mixed-subject challenge",
-                        subject: "",
-                        time: 20,
-                        description:
-                          "Bring different subjects into one focused session.",
-                        types: [],
-                      },
-                    ].map((e, i) => (
-                      <section className="panel exam-card" key={e.name}>
-                        <span className="exam-number">0{i + 1}</span>
-                        <GraduationCap size={27} />
-                        <h2>{e.name}</h2>
-                        <p className="muted">{e.description}</p>
-                        <div className="chips">
-                          <span className="tag">10 questions requested</span>
-                          <span className="tag">{e.time} minutes</span>
-                        </div>
-                        <button
-                          className="primary full"
-                          onClick={() =>
-                            build({
-                              ...defaultConfig,
-                              subjects: e.subject ? [e.subject] : [],
-                              types: e.types,
-                              count: 10,
-                              timeMode: "Total quiz",
-                              minutes: e.time,
-                              mode: "Exam Simulation",
-                              name: e.name,
-                            })
-                          }
-                        >
-                          Customize exam
-                          <ArrowRight size={16} />
-                        </button>
-                      </section>
-                    ))}
-                  </div>
-                </>
+                <Exams
+                  subjects={subjects}
+                  worldMode={store.worldMode ?? "standard"}
+                  onBuild={build}
+                />
               )}
               {page === "Settings" && (
                 <div className="settings-grid">
@@ -649,7 +534,7 @@ export default function Home() {
                       className="secondary"
                       onClick={() =>
                         download(
-                          "studycraft-backup.json",
+                          "noted-backup.json",
                           JSON.stringify(store, null, 2),
                         )
                       }
@@ -658,9 +543,38 @@ export default function Home() {
                       Export full backup
                     </button>
                     <p className="small muted">
-                      Question sets can be reimported in Question Banks. Full
-                      backups preserve records for safekeeping.
+                      Restore a full backup below, or import individual question
+                      sets in Question Banks.
                     </p>
+                    <label className="backup-restore">
+                      Restore full backup
+                      <input
+                        type="file"
+                        accept=".json"
+                        aria-label="Restore full backup"
+                        onChange={async (e) => {
+                          const f = e.target.files?.[0];
+                          if (!f) return;
+                          try {
+                            if (f.size > 10000000)
+                              throw new Error(
+                                "Backup must be smaller than 10 MB.",
+                              );
+                            const next = normalizeStore(
+                              JSON.parse(await f.text()),
+                            );
+                            setRestore(next);
+                          } catch (err) {
+                            setError(
+                              err instanceof Error
+                                ? err.message
+                                : "Invalid backup.",
+                            );
+                          }
+                          e.target.value = "";
+                        }}
+                      />
+                    </label>
                     <button
                       className="text-button danger"
                       onClick={() => setReset(true)}
@@ -707,6 +621,41 @@ export default function Home() {
           </footer>
         </main>
       </div>
+      {restore && (
+        <div className="modal-backdrop">
+          <div
+            className="panel modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Restore backup"
+          >
+            <h2>Restore this backup?</h2>
+            <p>
+              This replaces this browser’s workspace with{" "}
+              {restore.attempts.length} sessions, {restore.custom.length} custom
+              questions, and {restore.presets.length} presets. Export your
+              current backup first if you want to keep both.
+            </p>
+            <div className="flex-row">
+              <button className="secondary" onClick={() => setRestore(null)}>
+                Cancel
+              </button>
+              <button
+                className="primary"
+                onClick={() => {
+                  save(restore);
+                  setActive(null);
+                  setReview(null);
+                  setRestore(null);
+                  go("Dashboard");
+                }}
+              >
+                Restore workspace
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {reset && (
         <div className="modal-backdrop">
           <div

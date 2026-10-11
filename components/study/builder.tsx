@@ -16,6 +16,12 @@ import {
   type Subject,
 } from "../../lib/study/types";
 import { matching } from "../../lib/study/engine";
+import {
+  worldVisible,
+  historyPeriods,
+  historyRegions,
+  historySkills,
+} from "../../lib/study/course-mapping";
 export function Builder({
   bank,
   subjects,
@@ -31,10 +37,14 @@ export function Builder({
   onStart: (c: Config) => void;
   initial?: Config;
 }) {
-  const [c, setC] = useState<Config>(initial);
+  const [c, setC] = useState<Config>({
+    ...initial,
+    worldMode: initial.worldMode ?? store.worldMode ?? "standard",
+  });
   const [name, setName] = useState("");
   const [error, setError] = useState("");
-  const matches = matching(bank, c, store.attempts);
+  const visibleBank = bank.filter((q) => worldVisible(q, c.worldMode));
+  const matches = matching(bank, c, store.attempts, undefined, store.flags);
   const toggle = (
     key:
       | "subjects"
@@ -43,14 +53,18 @@ export function Builder({
       | "subtopics"
       | "types"
       | "difficulties"
-      | "tags",
+      | "tags"
+      | "collections"
+      | "periods"
+      | "regions"
+      | "skills",
     v: string,
   ) => {
     setC((old) => ({
       ...old,
-      [key]: old[key].includes(v)
-        ? old[key].filter((x) => x !== v)
-        : [...old[key], v],
+      [key]: (old[key] ?? []).includes(v)
+        ? (old[key] ?? []).filter((x) => x !== v)
+        : [...(old[key] ?? []), v],
       ...(key === "subjects"
         ? { units: [], topics: [], subtopics: [], tags: [] }
         : key === "units"
@@ -69,7 +83,7 @@ export function Builder({
       selected
         .flatMap((s) => s.units.map((u) => u.name))
         .concat(
-          bank
+          visibleBank
             .filter((q) => !c.subjects.length || c.subjects.includes(q.subject))
             .map((q) => q.unit),
         ),
@@ -84,7 +98,7 @@ export function Builder({
             .flatMap((u) => u.topics),
         )
         .concat(
-          bank
+          visibleBank
             .filter(
               (q) =>
                 (!c.subjects.length || c.subjects.includes(q.subject)) &&
@@ -94,14 +108,24 @@ export function Builder({
         ),
     ),
   ];
-  const scope = bank.filter(
+  const scope = visibleBank.filter(
     (q) =>
       (!c.subjects.length || c.subjects.includes(q.subject)) &&
       (!c.units.length || c.units.includes(q.unit)) &&
       (!c.topics.length || c.topics.includes(q.topic)),
   );
   const chips = (
-    key: "units" | "topics" | "subtopics" | "types" | "difficulties" | "tags",
+    key:
+      | "units"
+      | "topics"
+      | "subtopics"
+      | "types"
+      | "difficulties"
+      | "tags"
+      | "collections"
+      | "periods"
+      | "regions"
+      | "skills",
     items: string[],
   ) => (
     <div className="chips">
@@ -109,11 +133,11 @@ export function Builder({
         <button
           key={v}
           type="button"
-          className={c[key].includes(v) ? "chip selected" : "chip"}
+          className={(c[key] ?? []).includes(v) ? "chip selected" : "chip"}
           onClick={() => toggle(key, v)}
-          aria-pressed={c[key].includes(v)}
+          aria-pressed={(c[key] ?? []).includes(v)}
         >
-          {c[key].includes(v) && <Check size={13} />} {v}
+          {(c[key] ?? []).includes(v) && <Check size={13} />} {v}
         </button>
       ))}
     </div>
@@ -159,6 +183,43 @@ export function Builder({
             <span className="step">2</span>
             <h2>Find your focus</h2>
           </div>
+          {(!c.subjects.length || c.subjects.includes("world")) && (
+            <div className="world-mode-control">
+              <label>
+                AP World historical mode
+                <select
+                  aria-label="AP World quiz mode"
+                  value={c.worldMode}
+                  onChange={(e) => {
+                    const worldMode = e.target.value as "standard" | "expanded";
+                    setC({
+                      ...c,
+                      worldMode,
+                      units: [],
+                      topics: [],
+                      subtopics: [],
+                      tags: [],
+                      periods: [],
+                      regions: [],
+                      skills: [],
+                    });
+                    onSave({ ...store, worldMode });
+                  }}
+                >
+                  <option value="standard">
+                    Standard: 1200–1450 foundations
+                  </option>
+                  <option value="expanded">
+                    Expanded: 600–1450 foundations
+                  </option>
+                </select>
+              </label>
+              <p className="small muted">
+                Expanded mode adds 600–1200 background. Later AP World units
+                remain available in both modes. Saved progress is retained.
+              </p>
+            </div>
+          )}
           <details open={!!c.subjects.length}>
             <summary>
               Units <span>{c.units.length || "All"}</span>
@@ -175,9 +236,44 @@ export function Builder({
             <summary>Subtopics</summary>
             {chips("subtopics", [...new Set(scope.map((q) => q.subtopic))])}
           </details>
+          {scope.some((q) => q.subject === "world") && (
+            <>
+              <p className="small muted">
+                Choose any matches within each category. Categories combine
+                together.
+              </p>
+              <details>
+                <summary>Historical periods</summary>
+                {chips(
+                  "periods",
+                  historyPeriods.filter((t) =>
+                    scope.some((q) => q.tags.includes(t)),
+                  ),
+                )}
+              </details>
+              <details>
+                <summary>Geographic regions</summary>
+                {chips(
+                  "regions",
+                  historyRegions.filter((t) =>
+                    scope.some((q) => q.tags.includes(t)),
+                  ),
+                )}
+              </details>
+              <details>
+                <summary>Historical reasoning skills</summary>
+                {chips(
+                  "skills",
+                  historySkills.filter((t) =>
+                    scope.some((q) => q.tags.includes(t)),
+                  ),
+                )}
+              </details>
+            </>
+          )}
           {scope.some((q) => q.tags.length > 0) && (
             <details>
-              <summary>Period, region & reasoning tags</summary>
+              <summary>Additional tags (all must match)</summary>
               <p className="small muted">
                 Selected tags must all match a question.
               </p>
@@ -191,6 +287,20 @@ export function Builder({
             <h2>Make it yours</h2>
           </div>
           <label className="field-label">Question formats</label>
+          <details>
+            <summary>Question collections</summary>
+            {chips("collections", [
+              ...new Set(visibleBank.map((q) => q.collection)),
+            ])}
+          </details>
+          <label className="checkbox-row">
+            <input
+              type="checkbox"
+              checked={c.flaggedOnly ?? false}
+              onChange={(e) => setC({ ...c, flaggedOnly: e.target.checked })}
+            />
+            Flagged questions only
+          </label>
           {chips("types", [...questionTypes])}
           <label className="field-label">
             Difficulty <span className="muted">No selection = mixed</span>
@@ -385,7 +495,13 @@ export function Builder({
             <h3>Saved presets</h3>
             {store.presets.map((p, i) => (
               <div className="preset-row" key={i}>
-                <button className="text-button" onClick={() => setC(p)}>
+                <button
+                  className="text-button"
+                  onClick={() => {
+                    setC({ ...p, worldMode: p.worldMode ?? "standard" });
+                    onSave({ ...store, worldMode: p.worldMode ?? "standard" });
+                  }}
+                >
                   {p.name}
                 </button>
                 <button

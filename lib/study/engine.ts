@@ -1,9 +1,11 @@
 import type { Attempt, Config, Question, Result } from "./types";
+import { worldVisible } from "./course-mapping";
 export function matching(
   bank: Question[],
   config: Config,
   attempts: Attempt[],
   now = Date.now(),
+  flags: string[] = [],
 ) {
   const latest = new Map<string, { correct: boolean | null; date: string }>();
   attempts.forEach((a) =>
@@ -14,20 +16,32 @@ export function matching(
   return bank.filter(
     (q) =>
       (!config.subjects.length || config.subjects.includes(q.subject)) &&
-      (!config.units.length || config.units.includes(q.unit)) &&
+      worldVisible(q, config.worldMode ?? "standard") &&
+      (!config.flaggedOnly || flags.includes(q.id)) &&
+      (!config.units.length ||
+        config.units.includes(q.unit) ||
+        (!!q.legacyUnit && config.units.includes(q.legacyUnit))) &&
       (!config.topics.length || config.topics.includes(q.topic)) &&
       (!config.subtopics.length || config.subtopics.includes(q.subtopic)) &&
       (!config.types.length || config.types.includes(q.type)) &&
       (!config.difficulties.length ||
         config.difficulties.includes(q.difficulty)) &&
       (!config.tags.length || config.tags.every((t) => q.tags.includes(t))) &&
+      (!config.collections?.length ||
+        config.collections.includes(q.collection)) &&
+      (!config.periods?.length ||
+        config.periods.some((t) => q.tags.includes(t))) &&
+      (!config.regions?.length ||
+        config.regions.some((t) => q.tags.includes(t))) &&
+      (!config.skills?.length ||
+        config.skills.some((t) => q.tags.includes(t))) &&
       (config.source === "Mixed" || q.source === config.source) &&
       (config.mode !== "Incorrect Questions" ||
         latest.get(q.id)?.correct === false) &&
       (config.mode !== "Spaced Repetition" ||
         !latest.has(q.id) ||
         latest.get(q.id)?.correct === false ||
-        now - Date.parse(latest.get(q.id)!.date) >= 3 * 86400000),
+        reviewDue(q.id, attempts, now)),
   );
 }
 export function generate(
@@ -82,6 +96,7 @@ export function grade(
       points,
       max,
       rubric: earned,
+      gradingMethod: "manual",
     };
   }
   let correct = false;
@@ -97,14 +112,55 @@ export function grade(
       response.split("|").filter(Boolean).sort().join("|") ===
       q.answer.split("|").sort().join("|");
   else
-    correct = response.trim().toLowerCase() === q.answer.trim().toLowerCase();
+    correct = [q.answer, ...(q.acceptedAnswers ?? [])].some(
+      (a) =>
+        response.trim().replace(/\s+/g, " ").toLowerCase() ===
+        a.trim().replace(/\s+/g, " ").toLowerCase(),
+    );
   return {
     questionId: q.id,
     response,
     correct,
     points: correct ? 1 : 0,
     max: 1,
+    gradingMethod: "automatic",
   };
+}
+export function reviewDue(id: string, attempts: Attempt[], now = Date.now()) {
+  const history = attempts
+    .flatMap((a) =>
+      a.results
+        .filter((r) => r.questionId === id && r.correct !== null)
+        .map((r) => ({ correct: r.correct, date: a.date })),
+    )
+    .sort((a, b) => Date.parse(a.date) - Date.parse(b.date));
+  if (!history.length || history.at(-1)!.correct === false) return true;
+  let consecutive = 0;
+  for (let i = history.length - 1; i >= 0 && history[i].correct; i--)
+    consecutive++;
+  const interval = [3, 7, 14, 30, 60][Math.min(consecutive - 1, 4)];
+  return now - Date.parse(history.at(-1)!.date) >= interval * 86400000;
+}
+export function difficultyStats(attempts: Attempt[]) {
+  return ["Easy", "Medium", "Hard"].map((difficulty) => {
+    const results = attempts.flatMap((a) =>
+      a.results.filter(
+        (r) =>
+          r.correct !== null &&
+          a.questions.find((q) => q.id === r.questionId)?.difficulty ===
+            difficulty,
+      ),
+    );
+    return {
+      difficulty,
+      total: results.length,
+      percent: results.length
+        ? Math.round(
+            (100 * results.filter((r) => r.correct).length) / results.length,
+          )
+        : 0,
+    };
+  });
 }
 export function accuracy(attempts: Attempt[]) {
   const r = attempts

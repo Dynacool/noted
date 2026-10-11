@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "./noted.css";
 import "katex/dist/katex.min.css";
 
 export const metadata: Metadata = {
-  title: "Studycraft | Your next chapter starts here",
+  title: "Noted | Learn, practice, improve",
   description:
-    "Focused practice, thoughtful feedback, and progress that stays with you.",
+    "Detailed course notes, original practice questions, and thoughtful rubric feedback for high school learners.",
   icons: {
     icon: "/favicon.svg",
     shortcut: "/favicon.svg",

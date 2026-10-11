@@ -30,6 +30,9 @@ export type Question = {
   rubric?: Rubric[];
   example?: string;
   tolerance?: number;
+  scope?: "standard" | "background" | "extension";
+  acceptedAnswers?: string[];
+  legacyUnit?: string;
 };
 export type Subject = {
   id: string;
@@ -38,6 +41,7 @@ export type Subject = {
   description: string;
   color: string;
   units: { name: string; topics: string[] }[];
+  framework?: { label: string; url: string; note?: string };
 };
 export type Config = {
   subjects: string[];
@@ -53,6 +57,12 @@ export type Config = {
   minutes: number;
   mode: string;
   name?: string;
+  worldMode?: "standard" | "expanded";
+  collections?: string[];
+  periods?: string[];
+  regions?: string[];
+  skills?: string[];
+  flaggedOnly?: boolean;
 };
 export type Result = {
   questionId: string;
@@ -61,6 +71,7 @@ export type Result = {
   points: number;
   max: number;
   rubric?: number[];
+  gradingMethod?: "automatic" | "manual" | "gemini";
 };
 export type Attempt = {
   id: string;
@@ -87,6 +98,35 @@ export type Store = {
   goals: Goal[];
   dark: boolean;
   dailyTarget: number;
+  worldMode?: "standard" | "expanded";
+  completedLessons?: string[];
+  gradingHistory?: GradingRecord[];
+};
+export type CriterionFeedback = {
+  criterion: string;
+  points: number;
+  max: number;
+  evidence: string;
+  missing: string;
+  suggestion: string;
+};
+export type GradingEstimate = {
+  label: string;
+  provider: "gemini" | "manual";
+  model?: string;
+  points: number[];
+  breakdown: CriterionFeedback[];
+  feedback: string;
+  improvements: string;
+  example: string;
+};
+export type GradingRecord = {
+  id: string;
+  date: string;
+  question: Question;
+  response: string;
+  estimate: GradingEstimate;
+  previousId?: string;
 };
 export const defaultConfig: Config = {
   subjects: [],

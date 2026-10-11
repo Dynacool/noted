@@ -11,11 +11,17 @@ import {
   Trash2,
   TrendingUp,
 } from "lucide-react";
-import { accuracy, topicStats } from "../../lib/study/engine";
+import {
+  accuracy,
+  topicStats,
+  difficultyStats,
+  matching,
+} from "../../lib/study/engine";
 import {
   defaultConfig,
   type Config,
   type Store,
+  type Question,
   type Subject,
 } from "../../lib/study/types";
 const dayKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
@@ -76,12 +82,14 @@ export function ActivityChart({ store }: { store: Store }) {
 export function Dashboard({
   store,
   subjects,
+  bank,
   onSave,
   onPage,
   onBuild,
 }: {
   store: Store;
   subjects: Subject[];
+  bank: Question[];
   onSave: (s: Store) => void;
   onPage: (p: string) => void;
   onBuild: (c: Config) => void;
@@ -101,37 +109,52 @@ export function Dashboard({
     [deadline, setDeadline] = useState("");
   return (
     <>
-      <section className="welcome-banner">
+      <section className="study-overview panel">
         <div>
-          <div className="eyebrow">
-            <span>✦</span> SMALL STEPS. BIG POSSIBILITIES.
+          <span className="eyebrow">TODAY’S STUDY</span>
+          <h2>What will you work on?</h2>
+          <p>
+            Study a lesson, practice a skill, or return to questions due for
+            review.
+          </p>
+          <div className="flex-row mt">
+            <button className="primary" onClick={() => onPage("Quiz Builder")}>
+              Build a practice quiz
+              <ArrowRight size={17} />
+            </button>
+            <button className="secondary" onClick={() => onPage("Subjects")}>
+              <BookOpen size={16} />
+              Study course notes
+            </button>
           </div>
-          <h2>
-            Your next chapter
-            <br />
-            starts with a little practice.
-          </h2>
-          <p>A focused session today. A more confident you tomorrow.</p>
-          <button className="primary" onClick={() => onPage("Quiz Builder")}>
-            Build a practice quiz
-            <ArrowRight size={17} />
-          </button>
         </div>
-        <div className="banner-art" aria-hidden="true">
-          <div className="orbit orbit-one" />
-          <div className="orbit orbit-two" />
-          <div className="book-art">
-            <div className="book-spine" />
-            <span>
-              Keep
-              <br />
-              growing.
-            </span>
-            <div className="book-lines" />
+        <div className="overview-progress">
+          <strong>
+            {Math.min(100, Math.round((minutes / store.dailyTarget) * 100))}%
+          </strong>
+          <span>of today’s {store.dailyTarget}-minute goal</span>
+          <div className="progress-track">
+            <div
+              style={{
+                width: Math.min(100, (minutes / store.dailyTarget) * 100) + "%",
+              }}
+            />
           </div>
-          <span className="art-star star-one">✦</span>
-          <span className="art-star star-two">✧</span>
-          <span className="art-dot" />
+          <span>
+            {store.completedLessons?.length ?? 0} unit notes read ·{" "}
+            {
+              matching(
+                bank,
+                {
+                  ...defaultConfig,
+                  worldMode: store.worldMode,
+                  mode: "Spaced Repetition",
+                },
+                store.attempts,
+              ).length
+            }{" "}
+            questions due or new
+          </span>
         </div>
       </section>
       <div className="stats-grid">
@@ -215,7 +238,23 @@ export function Dashboard({
                     ...defaultConfig,
                     subjects: [weak[0].subject],
                     topics: [weak[0].topic],
-                    count: 5,
+                    count: Math.max(
+                      1,
+                      Math.min(
+                        5,
+                        matching(
+                          bank,
+                          {
+                            ...defaultConfig,
+                            worldMode: store.worldMode,
+                            subjects: [weak[0].subject],
+                            topics: [weak[0].topic],
+                          },
+                          store.attempts,
+                        ).length,
+                      ),
+                    ),
+                    worldMode: store.worldMode,
                   })
                 }
               >
@@ -418,11 +457,13 @@ export function Dashboard({
 export function Analytics({
   store,
   subjects,
+  bank,
   onReview,
   onBuild,
 }: {
   store: Store;
   subjects: Subject[];
+  bank: Question[];
   onReview: (id: string) => void;
   onBuild: (c: Config) => void;
 }) {
@@ -445,6 +486,51 @@ export function Analytics({
             <strong>{value}</strong>
           </div>
         ))}
+      </div>
+      <div className="dashboard-middle">
+        <section className="panel">
+          <h2>Accuracy over recent sessions</h2>
+          <p className="small muted">
+            Assessed answers per session. Written reviews are included once
+            scored.
+          </p>
+          <div className="accuracy-trend">
+            {store.attempts
+              .filter((a) => accuracy([a]).answered)
+              .slice(-10)
+              .map((a, i) => (
+                <div key={a.id} className="trend-column">
+                  <div
+                    className="trend-bar"
+                    style={{ height: accuracy([a]).percent + "%" }}
+                  />
+                  <strong>{accuracy([a]).percent}%</strong>
+                  <span>{i + 1}</span>
+                </div>
+              ))}
+          </div>
+          {!stats.answered && (
+            <p className="muted">
+              Finish an assessed session to see your trend.
+            </p>
+          )}
+        </section>
+        <section className="panel">
+          <h2>Accuracy by difficulty</h2>
+          {difficultyStats(store.attempts).map((d) => (
+            <div className="accuracy-row" key={d.difficulty}>
+              <div>
+                <span>
+                  {d.difficulty} · {d.total} assessed
+                </span>
+                <span>{d.total ? d.percent + "%" : "No data yet"}</span>
+              </div>
+              <div className="progress-track">
+                <div style={{ width: d.percent + "%" }} />
+              </div>
+            </div>
+          ))}
+        </section>
       </div>
       <div className="dashboard-middle">
         <section className="panel">
@@ -502,7 +588,23 @@ export function Analytics({
                   ...defaultConfig,
                   subjects: [t.subject],
                   topics: [t.topic],
-                  count: 5,
+                  count: Math.max(
+                    1,
+                    Math.min(
+                      5,
+                      matching(
+                        bank,
+                        {
+                          ...defaultConfig,
+                          worldMode: store.worldMode,
+                          subjects: [t.subject],
+                          topics: [t.topic],
+                        },
+                        store.attempts,
+                      ).length,
+                    ),
+                  ),
+                  worldMode: store.worldMode,
                 })
               }
             >

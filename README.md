@@ -1,48 +1,46 @@
-﻿# Studycraft
+# Noted
 
-A functional browser-local study app built with React, TypeScript, Tailwind, KaTeX, and the Next.js App Router API through the Sites Vinext runtime.
+An upgrade of the existing Studycraft application using its React, TypeScript, Tailwind, KaTeX, and Next App Router API stack through the Sites Vinext runtime. Existing browser data is retained under `studycraft.v1`; question IDs and completed-attempt snapshots are preserved.
 
-## Run
+## Run and verify
 
 ```sh
 npm install
 npm run dev
-```
-
-Default URL: http://127.0.0.1:5173. If the Windows npm shim resolves incorrectly, invoke `node "C:/Program Files/nodejs/node_modules/npm/bin/npm-cli.js" install` and `node scripts/run-framework.mjs dev` directly.
-
-## Verification
-
-```sh
 npm run typecheck
 npm run lint
 npm test
 npm run build
 ```
 
-For browser tests, start the dev server, set TEST_URL to its URL, and run `npm run test:browser`. Windows tests use installed Google Chrome. Elsewhere install Playwright Chromium or specify BROWSER_PATH. Tests use an isolated browser context.
+The default preview is http://127.0.0.1:5173. On Windows, if the npm shim resolves incorrectly, use `node "C:/Program Files/nodejs/node_modules/npm/bin/npm-cli.js"` in place of `npm`. Browser tests run against an already running server on port 5175 (or `TEST_URL`) with `npm run test:browser`. They use installed Chrome on Windows; elsewhere specify `BROWSER_PATH` or an installed Playwright Chromium.
 
-## Workflows
+## Learning and practice
 
-- 84 original exercises, 12 per subject, with every listed unit represented. AP World and AP Statistics each include all nine units. This starter bank is not comprehensive curriculum coverage.
-- Cross-subject filters: unit, topic, subtopic, format, difficulty, period/region/skill tags, source, and review mode. Explicit shortages, presets, custom counts.
-- Numerical/fraction, MCQ, multiple-select, exact short-answer grading. Multi-part written and Java responses use question-specific manual rubrics.
-- Total/per-question timers, navigation, hints, flags, explanations, detailed reviews, missed-question retries. Exam mode withholds feedback until completion. Exams are short original sets, not official/full-length exams.
-- Question creation, editing, duplication, deletion, collections, custom subjects, validated JSON/CSV imports, exports, template download.
-- FRQ self-review, revisions, pending-response review, optional server-side AI gateway. The short DBQ uses three fictional teaching documents and is not a full AP DBQ.
-- Saved-session analytics, daily/weekly time, subject/topic accuracy, weak-topic recommendations, attempts, streaks, goals. Spaced repetition uses a three-day interval for correct answers; unseen and incorrect questions are immediately due.
-- Dark/light mode, responsive sidebar, local settings, full backup export.
+- Course pages include substantive unit notes, subtopics, vocabulary, concepts, worked examples, misconceptions, and reading progress for seven subjects. History also includes timelines and comparisons. Sources and curriculum notes are linked from the lessons.
+- AP World retains nine assessed Modern units and an optional 600–1200 background lesson. Standard and expanded modes update course visibility and quiz filters while preserving progress. Earlier material is explicitly outside the assessed Modern timeframe.
+- CSA uses the current four-unit framework. AP Statistics uses the five-unit framework effective Fall 2026. Older inheritance, goodness-of-fit, and slope-inference practice remains available as labeled enrichment. Legacy presets match original unit labels through a compatibility mapping.
+- Banks combine the original 84 questions with new independently authored questions. The tests enforce at least 75 per subject, unique IDs, schema integrity, unit coverage, multiple difficulties, and reference-answer acceptance. These are original instructional exercises, not released exam questions. Mini DBQ/LEQ rubrics are question-specific study rubrics, not representations of the entire official exam rubric.
+- Quiz filters support multiple subjects, units, topics, subtopics, formats, difficulties, sources, collections, flags, history periods/regions/skills, incorrect-answer review, and spaced review. Matching counts and explicit shortages prevent silently substituting unrelated questions. Presets include historical modes.
+- Practice supports navigation, flagging, hints, explanations, answer review, missed-question retries, total/per-question timers, and exam feedback withholding. Navigating elsewhere preserves the active session; reloading clears unfinished work. Completed sessions persist.
+- Automatic grading covers numerical answers/fractions with tolerance, MCQ, multiple select, and normalized short answers with accepted alternatives. Mathematical written work and Java use rubrics. No arbitrary symbolic equivalence or code execution is claimed.
+- Simulations include SAT module-length Math and Reading & Writing, AMC-style 25-question practice, mixed tests, and customizable AP unit/cumulative objective or written sets. They are not official exams; SAT practice is not adaptive and AMC sets permit numerical responses. AP time limits are suggested study limits.
+- Dashboard/analytics show study time, assessed answers, subject/topic/difficulty accuracy, weak topics, recent-session trends, streaks, goals, and review suggestions. Consecutive correct answers extend spaced intervals through 3, 7, 14, 30, and 60 days; unseen/incorrect questions are immediately due.
+- Question studio supports custom subjects, collections, question editing, alternatives/tolerance, hints, tags, rubrics, and validated JSON/CSV import/export. Bank pagination keeps larger sets manageable. Import assigns new IDs to avoid collisions. PDF/document ingestion is a future adapter targeting the same validated question schema.
+- Settings supports full workspace backup export and validated restore with an explicit replacement confirmation.
 
-## AI provider
+## Gemini grading
 
-AI is unavailable by default. No evaluations are fabricated. Configure GRADING_PROVIDER_URL (HTTPS) and GRADING_PROVIDER_KEY in the server environment to connect a private grading gateway. Never expose keys with NEXT_PUBLIC_ variables.
+Set **GEMINI_API_KEY** as a secret server-side runtime environment variable. Never use a `NEXT_PUBLIC_` prefix or put keys in client source. Optionally set `GEMINI_MODEL`; the default is `gemini-3.8-flash`. Environment changes require deployment to take effect. No key is included in this repository.
 
-The gateway receives `{ question, response, rubric }` and returns `{ points: number[], feedback: string, improvements: string, example: string }`. Points and bounds are validated. Results are labeled AI estimates, not official AP scores. The interface is in lib/study/ai.server.ts. Java responses are never executed. A configured production gateway should enforce rate limits and provider privacy controls.
+`GET /api/grade` reports availability. `POST /api/grade` accepts `{question, response}` and uses the Gemini REST `generateContent` API with structured JSON output, a trusted question rubric, and a timeout. The server validates criterion counts, integer point bounds, missing requirements, and the presence of quoted evidence in the submitted response. Failure, invalid output, authentication errors, timeout, and rate-limit conditions return an actionable manual-review fallback. Requests are limited to four per minute per authenticated user per runtime isolate; this supplements Gemini quotas rather than providing a global distributed limit. The hosted site retains its existing owner-private audience.
 
-## Architecture and limitations
+The written response studio supports original/custom SAQ, DBQ, LEQ, statistics, chemistry, calculus-style enrichment, Java, and other rubric questions. Reviews contain criterion evidence, missing requirements, improvements, and stronger examples. Successful Gemini estimates automatically save to grading history and scored attempts. Manual reviews save only when requested and remain labeled self-assessments. Revisions retain previous records. Grades are unofficial estimates and AI review sends the question and response to Google; Java is reviewed statically.
 
-Schema: lib/study/types.ts. Taxonomy: subjects.ts. Content: bank.ts. Filtering/grading/statistics: engine.ts. Import adapters: import.ts. Repository: storage.ts. Replace the local repository with a cloud adapter for Firebase or Supabase. Future PDF/document adapters should produce the same validated question schema.
+Tests mock the Gemini REST contract. Without a configured production key, live Gemini evaluation remains unverified and manual assessment remains available. Framework references: [Gemini generateContent](https://ai.google.dev/api/generate-content), [structured output](https://ai.google.dev/gemini-api/docs/structured-output), [models](https://ai.google.dev/gemini-api/docs/models).
 
-Completed attempts contain question snapshots. Written responses awaiting assessment are excluded from accuracy. Progress persists in the current browser only. Full backup export is for safekeeping; full-state restoration is not included. Question-set import supports JSON/CSV. Goals count all assessed questions in the workspace.
+## Architecture and limits
 
-The nine views use deep-linkable hash routes to keep a practice session in memory across navigation. Reloading clears unfinished work, while completed attempts and other saved records persist.
+`lib/study/types.ts` defines shared data; `content/` stores original notes and questions; `catalog.ts` assembles the upgraded courses; `course-mapping.ts` retains legacy unit compatibility. `engine.ts` owns filtering, generation, grading, spaced review, and metrics. `ai.server.ts` owns Gemini access; only the server API imports it as a value. `import.ts` owns file adapters and validation; `storage.ts` owns local persistence and backup normalization. UI components consume this shared data.
+
+Progress remains browser-local. A cloud account/sync service and PDF ingestion are future work. Written responses awaiting assessment are excluded from accuracy. Accuracy measures fully correct answers; rubric points remain visible separately. Goal targets count all assessed questions in the workspace. Deleting or editing a question does not alter old attempt snapshots. Adding more authored modules scales content without changing quiz or grading logic.

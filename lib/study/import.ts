@@ -28,6 +28,17 @@ export function validateQuestions(
     if (!["Easy", "Medium", "Hard"].includes(q.difficulty))
       fail("difficulty must be Easy, Medium, or Hard.");
     if (typeof q.answer !== "string") fail("answer must be a string.");
+    if (
+      q.scope !== undefined &&
+      !["standard", "background", "extension"].includes(q.scope)
+    )
+      fail("scope must be standard, background, or extension.");
+    if (
+      q.acceptedAnswers !== undefined &&
+      (!Array.isArray(q.acceptedAnswers) ||
+        q.acceptedAnswers.some((a) => typeof a !== "string" || !a.trim()))
+    )
+      fail("acceptedAnswers must be an array of nonempty strings.");
     for (const key of ["id", "subtopic", "collection", "example"] as const)
       if (q[key] !== undefined && typeof q[key] !== "string")
         fail(`${key} must be a string.`);
@@ -41,13 +52,25 @@ export function validateQuestions(
         new Set(q.options).size !== q.options.length
       )
         fail("provide at least two distinct answer options.");
-      if (!q.answer.split("|").every((a) => q.options!.includes(a)))
+      if (
+        q.type === "MCQ"
+          ? !q.options!.includes(q.answer)
+          : !q.answer.split("|").every((a) => q.options!.includes(a))
+      )
         fail(
           "answer must match the options exactly (use | for multiple select).",
         );
-      if (q.type === "MCQ" && q.answer.includes("|"))
-        fail("MCQ must have one correct option.");
-      if (new Set(q.answer.split("|")).size !== q.answer.split("|").length)
+      if (
+        q.type === "Multiple select" &&
+        q.options!.some((o) => o.includes("|"))
+      )
+        fail(
+          "Multiple-select options cannot contain |; describe a logical OR in words.",
+        );
+      if (
+        q.type === "Multiple select" &&
+        new Set(q.answer.split("|")).size !== q.answer.split("|").length
+      )
         fail("correct options must not be repeated.");
     }
     if (
@@ -163,6 +186,11 @@ export function importFile(text: string, filename: string) {
         tags: q.tags ? JSON.parse(q.tags) : [],
         rubric: q.rubric ? JSON.parse(q.rubric) : undefined,
         tolerance: q.tolerance ? Number(q.tolerance) : undefined,
+        acceptedAnswers: q.acceptedAnswers
+          ? JSON.parse(q.acceptedAnswers)
+          : undefined,
+        scope: q.scope || undefined,
+        legacyUnit: q.legacyUnit || undefined,
       })),
     );
   return validateQuestions(JSON.parse(text));
@@ -186,6 +214,9 @@ export function exportCSV(questions: Question[]) {
     "rubric",
     "example",
     "tolerance",
+    "acceptedAnswers",
+    "scope",
+    "legacyUnit",
   ];
   const quote = (s: string) => '"' + s.replace(/"/g, '""') + '"';
   return [

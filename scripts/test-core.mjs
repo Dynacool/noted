@@ -16,9 +16,23 @@ function compile(input) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, result);
 }
-for (const file of fs.readdirSync("lib/study").filter((f) => f.endsWith(".ts")))
-  compile("lib/study/" + file);
-compile("tests/core.test.ts");
-await import(
-  "file:///" + path.join(output, "tests/core.test.js").replaceAll("\\", "/")
-);
+function walk(dir) {
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const input = dir + "/" + entry.name;
+    if (entry.isDirectory()) walk(input);
+    else if (input.endsWith(".ts")) compile(input);
+  }
+}
+walk("lib/study");
+walk("app/api/grade");
+for (const file of fs
+  .readdirSync("tests")
+  .filter((f) => f.endsWith(".test.ts"))) {
+  compile("tests/" + file);
+  await import(
+    "file:///" +
+      path
+        .join(output, "tests", file.replace(/\.ts$/, ".js"))
+        .replaceAll("\\", "/")
+  );
+}

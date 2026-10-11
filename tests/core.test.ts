@@ -170,6 +170,7 @@ assert.equal(repository.load().attempts[0].results[0].correct, true);
 assert.equal(repository.load().presets[0].count, 4);
 delete process.env.GRADING_PROVIDER_URL;
 delete process.env.GRADING_PROVIDER_KEY;
+delete process.env.GEMINI_API_KEY;
 assert.equal(configuredProvider(), null);
 console.log(
   "PASS: content, compound filters, shortages, grading, review modes, JSON/CSV roundtrips, validation, persistence, provider fallback.",

@@ -53,11 +53,16 @@ export function Banks({
     [notice, setNotice] = useState(""),
     [deleteId, setDeleteId] = useState(""),
     [newSubject, setNewSubject] = useState("");
+  const [page, setPage] = useState(0),
+    [source, setSource] = useState(""),
+    [flagsOnly, setFlagsOnly] = useState(false);
   const file = useRef<HTMLInputElement>(null);
   const visible = bank.filter(
     (q) =>
       (!subject || q.subject === subject) &&
       (!collection || q.collection === collection) &&
+      (!source || q.source === source) &&
+      (!flagsOnly || store.flags.includes(q.id)) &&
       `${q.prompt} ${q.topic} ${q.tags.join(" ")}`
         .toLowerCase()
         .includes(search.toLowerCase()),
@@ -89,7 +94,10 @@ export function Banks({
             placeholder="Search questions, topics, or tags"
             aria-label="Search questions"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(0);
+            }}
           />
         </div>
         <button className="secondary" onClick={() => file.current?.click()}>
@@ -99,10 +107,7 @@ export function Banks({
         <button
           className="secondary"
           onClick={() =>
-            download(
-              "studycraft-questions.json",
-              JSON.stringify(visible, null, 2),
-            )
+            download("noted-questions.json", JSON.stringify(visible, null, 2))
           }
           disabled={!visible.length}
         >
@@ -112,7 +117,7 @@ export function Banks({
         <button
           className="secondary"
           onClick={() =>
-            download("studycraft-questions.csv", exportCSV(visible), "text/csv")
+            download("noted-questions.csv", exportCSV(visible), "text/csv")
           }
           disabled={!visible.length}
         >
@@ -165,7 +170,10 @@ export function Banks({
           <select
             aria-label="Filter subject"
             value={subject}
-            onChange={(e) => setSubject(e.target.value)}
+            onChange={(e) => {
+              setSubject(e.target.value);
+              setPage(0);
+            }}
           >
             <option value="">All subjects</option>
             {subjects.map((s) => (
@@ -177,7 +185,10 @@ export function Banks({
           <select
             aria-label="Filter collection"
             value={collection}
-            onChange={(e) => setCollection(e.target.value)}
+            onChange={(e) => {
+              setCollection(e.target.value);
+              setPage(0);
+            }}
           >
             <option value="">All collections</option>
             {[...new Set(bank.map((q) => q.collection))].map((s) => (
@@ -185,69 +196,107 @@ export function Banks({
             ))}
           </select>
           <span className="muted small">{visible.length} questions</span>
+          <select
+            aria-label="Filter source"
+            value={source}
+            onChange={(e) => {
+              setSource(e.target.value);
+              setPage(0);
+            }}
+          >
+            <option value="">All sources</option>
+            {["Preloaded", "Imported", "Custom"].map((s) => (
+              <option key={s}>{s}</option>
+            ))}
+          </select>
+          <label className="checkbox-row">
+            <input
+              type="checkbox"
+              checked={flagsOnly}
+              onChange={(e) => {
+                setFlagsOnly(e.target.checked);
+                setPage(0);
+              }}
+            />
+            Flagged only
+          </label>
         </div>
         <div className="bank-list">
-          {visible.map((q) => (
-            <article className="bank-question" key={q.id}>
-              <div>
-                <div className="question-meta">
-                  <span className="tag">
-                    {subjects.find((s) => s.id === q.subject)?.name ??
-                      q.subject}
-                  </span>
-                  <span>{q.type}</span>
-                  <span>{q.difficulty}</span>
-                  <span className="small muted">{q.source}</span>
+          {visible
+            .slice(
+              Math.min(page, Math.max(0, Math.ceil(visible.length / 30) - 1)) *
+                30,
+              (Math.min(page, Math.max(0, Math.ceil(visible.length / 30) - 1)) +
+                1) *
+                30,
+            )
+            .map((q) => (
+              <article className="bank-question" key={q.id}>
+                <div>
+                  <div className="question-meta">
+                    <span className="tag">
+                      {subjects.find((s) => s.id === q.subject)?.name ??
+                        q.subject}
+                    </span>
+                    <span>{q.type}</span>
+                    <span>{q.difficulty}</span>
+                    {q.scope === "background" && (
+                      <span className="tag">600–1200 background</span>
+                    )}
+                    {q.scope === "extension" && (
+                      <span className="tag">Enrichment</span>
+                    )}
+                    <span className="small muted">{q.source}</span>
+                  </div>
+                  <h3>
+                    <MathText text={q.prompt} />
+                  </h3>
+                  <p className="small muted">
+                    {q.unit} / {q.topic} · {q.collection}
+                  </p>
                 </div>
-                <h3>
-                  <MathText text={q.prompt} />
-                </h3>
-                <p className="small muted">
-                  {q.unit} / {q.topic} · {q.collection}
-                </p>
-              </div>
-              <div className="flex-row">
-                <button
-                  className="icon-btn"
-                  aria-label={`Edit ${q.id}`}
-                  onClick={() => {
-                    setError("");
-                    setEditor(q);
-                  }}
-                >
-                  <Pencil size={15} />
-                </button>
-                <button
-                  className="icon-btn"
-                  aria-label={`Duplicate ${q.id}`}
-                  onClick={() => {
-                    onSave({
-                      ...store,
-                      custom: [
-                        ...store.custom,
-                        {
-                          ...q,
-                          id: crypto.randomUUID(),
-                          source: "Custom",
-                          collection: "My questions",
-                        },
-                      ],
-                    });
-                    setNotice("Question duplicated into My questions.");
-                  }}
-                >
-                  <Copy size={15} />
-                </button>
-                <button
-                  className="icon-btn"
-                  aria-label={`Delete ${q.id}`}
-                  onClick={() => setDeleteId(q.id)}
-                >
-                  <Trash2 size={15} />
-                </button>
-              </div>
-            </article>
-          ))}
+                <div className="flex-row">
+                  <button
+                    className="icon-btn"
+                    aria-label={`Edit ${q.id}`}
+                    onClick={() => {
+                      setError("");
+                      setEditor(q);
+                    }}
+                  >
+                    <Pencil size={15} />
+                  </button>
+                  <button
+                    className="icon-btn"
+                    aria-label={`Duplicate ${q.id}`}
+                    onClick={() => {
+                      onSave({
+                        ...store,
+                        custom: [
+                          ...store.custom,
+                          {
+                            ...q,
+                            id: crypto.randomUUID(),
+                            source: "Custom",
+                            collection: "My questions",
+                          },
+                        ],
+                      });
+                      setNotice("Question duplicated into My questions.");
+                    }}
+                  >
+                    <Copy size={15} />
+                  </button>
+                  <button
+                    className="icon-btn"
+                    aria-label={`Delete ${q.id}`}
+                    onClick={() => setDeleteId(q.id)}
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+              </article>
+            ))}
           {!visible.length && (
             <div className="empty">
               <Search />
@@ -258,6 +307,28 @@ export function Banks({
             </div>
           )}
         </div>
+        {visible.length > 30 && (
+          <div className="pagination">
+            <button
+              className="secondary"
+              disabled={page === 0}
+              onClick={() => setPage(Math.max(0, page - 1))}
+            >
+              Previous
+            </button>
+            <span>
+              Page {Math.min(page + 1, Math.ceil(visible.length / 30))} of{" "}
+              {Math.ceil(visible.length / 30)}
+            </span>
+            <button
+              className="secondary"
+              disabled={page >= Math.ceil(visible.length / 30) - 1}
+              onClick={() => setPage(page + 1)}
+            >
+              Next
+            </button>
+          </div>
+        )}
       </section>
       <details className="panel">
         <summary>Import format & custom subjects</summary>
@@ -378,17 +449,13 @@ function QuestionEditor({
   const [q, setQ] = useState(question),
     [error, setError] = useState(""),
     [rubric, setRubric] = useState(
-      JSON.stringify(
-        question.rubric ?? [
-          {
-            criterion: "Correct reasoning",
-            points: 1,
-            guidance: "Explain the relevant concept accurately.",
-          },
-        ],
-        null,
-        2,
-      ),
+      question.rubric ?? [
+        {
+          criterion: "Correct reasoning",
+          points: 1,
+          guidance: "Explain the relevant concept accurately.",
+        },
+      ],
     );
   const set = (key: keyof Question, value: unknown) =>
     setQ({ ...q, [key]: value });
@@ -421,7 +488,7 @@ function QuestionEditor({
             e.preventDefault();
             try {
               const [valid] = validateQuestions(
-                [{ ...q, rubric: written ? JSON.parse(rubric) : undefined }],
+                [{ ...q, rubric: written ? rubric : undefined }],
                 "Custom",
               );
               onSubmit(valid);
@@ -552,6 +619,32 @@ function QuestionEditor({
               onChange={(e) => set("explanation", e.target.value)}
             />
           </label>
+          {q.type === "Short answer" && (
+            <label>
+              Accepted alternate answers (one per line)
+              <textarea
+                value={(q.acceptedAnswers ?? []).join("\n")}
+                onChange={(e) =>
+                  set(
+                    "acceptedAnswers",
+                    e.target.value.split("\n").filter((a) => a.trim()),
+                  )
+                }
+              />
+            </label>
+          )}
+          {q.type === "Numerical" && (
+            <label>
+              Absolute numerical tolerance
+              <input
+                type="number"
+                min="0"
+                step="any"
+                value={q.tolerance ?? 0.00001}
+                onChange={(e) => set("tolerance", Number(e.target.value))}
+              />
+            </label>
+          )}
           <label>
             Hint
             <input
@@ -562,15 +655,93 @@ function QuestionEditor({
           </label>
           {written && (
             <>
-              <label>
-                Rubric · JSON array of criterion, points, guidance
-                <textarea
-                  className="code-input"
-                  rows={8}
-                  value={rubric}
-                  onChange={(e) => setRubric(e.target.value)}
-                />
-              </label>
+              <div className="rubric-editor">
+                <h3>Scoring rubric</h3>
+                <p className="small muted">
+                  Define what earns each point. Gemini and manual reviews use
+                  this same guidance.
+                </p>
+                {rubric.map((r, i) => (
+                  <div className="rubric-editor-row" key={i}>
+                    <div className="form-grid">
+                      <label>
+                        Criterion
+                        <input
+                          required
+                          value={r.criterion}
+                          onChange={(e) =>
+                            setRubric(
+                              rubric.map((v, j) =>
+                                i === j
+                                  ? { ...v, criterion: e.target.value }
+                                  : v,
+                              ),
+                            )
+                          }
+                        />
+                      </label>
+                      <label>
+                        Maximum points
+                        <input
+                          required
+                          type="number"
+                          min="1"
+                          max="20"
+                          value={r.points}
+                          onChange={(e) =>
+                            setRubric(
+                              rubric.map((v, j) =>
+                                i === j
+                                  ? { ...v, points: Number(e.target.value) }
+                                  : v,
+                              ),
+                            )
+                          }
+                        />
+                      </label>
+                    </div>
+                    <label>
+                      Scoring guidance
+                      <textarea
+                        required
+                        rows={2}
+                        value={r.guidance}
+                        onChange={(e) =>
+                          setRubric(
+                            rubric.map((v, j) =>
+                              i === j ? { ...v, guidance: e.target.value } : v,
+                            ),
+                          )
+                        }
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      className="text-button danger"
+                      disabled={rubric.length === 1}
+                      onClick={() =>
+                        setRubric(rubric.filter((_, j) => i !== j))
+                      }
+                    >
+                      Remove criterion
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={rubric.length >= 20}
+                  onClick={() =>
+                    setRubric([
+                      ...rubric,
+                      { criterion: "", points: 1, guidance: "" },
+                    ])
+                  }
+                >
+                  <Plus size={14} />
+                  Add criterion
+                </button>
+              </div>
               <label>
                 Example stronger response
                 <textarea
