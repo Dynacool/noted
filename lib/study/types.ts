@@ -1,0 +1,104 @@
+export const questionTypes = [
+  "MCQ",
+  "Multiple select",
+  "Numerical",
+  "Short answer",
+  "SAQ",
+  "DBQ",
+  "LEQ",
+  "FRQ",
+  "Java",
+] as const;
+export type QuestionType = (typeof questionTypes)[number];
+export type Rubric = { criterion: string; points: number; guidance: string };
+export type Question = {
+  id: string;
+  subject: string;
+  unit: string;
+  topic: string;
+  subtopic: string;
+  difficulty: "Easy" | "Medium" | "Hard";
+  type: QuestionType;
+  prompt: string;
+  options?: string[];
+  answer: string;
+  explanation: string;
+  hint: string;
+  tags: string[];
+  source: "Preloaded" | "Custom" | "Imported";
+  collection: string;
+  rubric?: Rubric[];
+  example?: string;
+  tolerance?: number;
+};
+export type Subject = {
+  id: string;
+  name: string;
+  short: string;
+  description: string;
+  color: string;
+  units: { name: string; topics: string[] }[];
+};
+export type Config = {
+  subjects: string[];
+  units: string[];
+  topics: string[];
+  subtopics: string[];
+  types: string[];
+  difficulties: string[];
+  tags: string[];
+  source: string;
+  count: number;
+  timeMode: string;
+  minutes: number;
+  mode: string;
+  name?: string;
+};
+export type Result = {
+  questionId: string;
+  response: string;
+  correct: boolean | null;
+  points: number;
+  max: number;
+  rubric?: number[];
+};
+export type Attempt = {
+  id: string;
+  date: string;
+  seconds: number;
+  results: Result[];
+  questions: Question[];
+  config: Config;
+};
+export type Goal = {
+  id: string;
+  name: string;
+  target: number;
+  deadline: string;
+};
+export type Store = {
+  version: 1;
+  custom: Question[];
+  hidden: string[];
+  subjects: Subject[];
+  attempts: Attempt[];
+  presets: Config[];
+  flags: string[];
+  goals: Goal[];
+  dark: boolean;
+  dailyTarget: number;
+};
+export const defaultConfig: Config = {
+  subjects: [],
+  units: [],
+  topics: [],
+  subtopics: [],
+  types: [],
+  difficulties: [],
+  tags: [],
+  source: "Mixed",
+  count: 10,
+  timeMode: "Untimed",
+  minutes: 20,
+  mode: "Standard",
+};
