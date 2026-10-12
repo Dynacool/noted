@@ -1,9 +1,8 @@
 import { subjects as legacySubjects } from "./subjects";
-import { bank as legacyBank } from "./bank";
-import { worldUnits, worldQuestions } from "./content/world";
-import { stemUnits, stemQuestions } from "./content/stem";
-import { quantUnits, quantQuestions } from "./content/quant-code";
-import { currentQuestion } from "./course-mapping";
+import { worldUnits } from "./content/world";
+import { stemUnits } from "./content/stem";
+import { quantUnits } from "./content/quant-code";
+import { replacementBank } from "./replacement-bank";
 import type { Subject } from "./types";
 import type { UnitLesson } from "./content-types";
 export const unitLessons: UnitLesson[] = [
@@ -11,12 +10,7 @@ export const unitLessons: UnitLesson[] = [
   ...stemUnits,
   ...quantUnits,
 ];
-export const questionBank = [
-  ...legacyBank.map(currentQuestion),
-  ...worldQuestions,
-  ...stemQuestions,
-  ...quantQuestions,
-];
+export const questionBank = replacementBank;
 export function courseSubjects(
   worldMode: "standard" | "expanded" = "standard",
 ): Subject[] {
@@ -27,13 +21,15 @@ export function courseSubjects(
         (l.scope !== "background" || worldMode === "expanded") &&
         l.scope !== "extension",
     );
-    const units = [...new Set(lessons.map((l) => l.unit))].map((name) => ({
+    const questions = questionBank.filter(q => q.subject === s.id);
+    const units = [...new Set([...lessons.map((l) => l.unit), ...questions.map(q => q.unit)])].map((name) => ({
       name,
       topics: [
         ...new Set(
-          lessons
+          [...lessons
             .filter((l) => l.unit === name)
             .flatMap((l) => l.topics.map((t) => t.name)),
+          ...questions.filter(q => q.unit === name).map(q => q.topic)],
         ),
       ],
     }));

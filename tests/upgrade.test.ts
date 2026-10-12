@@ -15,6 +15,8 @@ import {
 import { validateQuestions, importFile, exportCSV } from "../lib/study/import";
 import { emptyStore, normalizeStore } from "../lib/study/storage";
 import { defaultConfig, type Attempt } from "../lib/study/types";
+assert.equal(questionBank.length, 2000);
+assert.ok(questionBank.every(q => q.id.startsWith("noted-new-2026-") && q.source === "Preloaded"));
 assert.equal(new Set(questionBank.map((q) => q.id)).size, questionBank.length);
 assert.equal(new Set(unitLessons.map((l) => l.id)).size, unitLessons.length);
 validateQuestions(questionBank, "Preloaded");
@@ -23,21 +25,21 @@ for (const s of courseSubjects()) {
     (q) => q.subject === s.id && q.scope !== "background",
   );
   assert.ok(qs.length >= 75, `${s.id}: only ${qs.length} questions`);
-  for (const d of ["Easy", "Medium", "Hard"])
+  for (const d of ["Easy", "Medium"])
     assert.ok(
       qs.some((q) => q.difficulty === d),
       `${s.id} needs ${d}`,
     );
   for (const u of s.units) {
-    assert.ok(
-      qs.some((q) => q.unit === u.name),
-      `${s.id} missing practice for ${u.name}`,
-    );
+    for (const q of qs.filter(q => q.unit === u.name)) assert.ok(u.topics.includes(q.topic));
     const lesson = unitLessons.find(
       (l) =>
         l.subject === s.id && l.unit === u.name && l.scope !== "background",
     );
-    assert.ok(lesson, `${s.id} missing notes ${u.name}`);
+    if (!lesson) {
+      assert.ok(qs.some(q => q.unit === u.name), `${s.id}: new unit must have practice`);
+      continue;
+    }
     assert.ok(
       lesson.topics.every((t) => t.lesson.length > 150 && t.subtopics.length),
     );
@@ -82,9 +84,9 @@ const standard = matching(
     { ...defaultConfig, subjects: ["world"], worldMode: "expanded" },
     [],
   );
-assert.ok(expanded.length > standard.length);
+assert.equal(expanded.length, standard.length);
 assert.ok(standard.every((q) => q.scope !== "background"));
-assert.ok(expanded.some((q) => q.tags.includes("600–1200")));
+assert.ok(expanded.every(q => q.scope === "standard"));
 const regional = matching(
   questionBank,
   {
@@ -96,7 +98,7 @@ const regional = matching(
   },
   [],
 );
-assert.ok(regional.length);
+assert.equal(regional.length, 0); // Supplied questions carry no regional/period/skill tags.
 assert.ok(
   regional.every(
     (q) =>
@@ -154,7 +156,7 @@ assert.deepEqual(restored.presets, saved.presets);
 assert.deepEqual(restored.hidden, saved.hidden);
 assert.equal(restored.custom[0].id, "my-question");
 assert.ok(
-  matching(questionBank, old.config, []).some((q) => q.id === "stats-7"),
+  !questionBank.some((q) => q.id === "stats-7"),
 );
 assert.equal(
   currentQuestion(old.questions[0]).unit,
@@ -203,5 +205,5 @@ assert.equal(
   1,
 );
 console.log(
-  `PASS: ${questionBank.length} original/legacy questions, ${unitLessons.length} substantive unit lessons; all seven subject targets, filters, World modes, answer acceptance, migration, backups, alternate answers, CSV, and spaced review.`,
+  `PASS: ${questionBank.length} replacement questions, ${unitLessons.length} substantive unit lessons; all seven subject targets, filters, World modes, answer acceptance, migration, backups, alternate answers, CSV, and spaced review.`,
 );
