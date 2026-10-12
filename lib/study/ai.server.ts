@@ -158,6 +158,15 @@ export function validateEstimate(
 }
 // Server-only: this file is never imported as a value by a client component.
 // REST contract: https://ai.google.dev/api/generate-content
+async function fetchWithUnavailableRetry(url: string, options: RequestInit): Promise<Response> {
+  const result = await fetch(url, options);
+  if (result.status !== 503) return result;
+  await result.body?.cancel();
+  // Retry once with a short backoff, within the original request's time budget.
+  await new Promise(resolve => setTimeout(resolve, 1000));
+  options.signal?.throwIfAborted();
+  return fetch(url, options);
+}
 export function configuredProvider(env: { GEMINI_API_KEY?: string; GEMINI_MODEL?: string } = { GEMINI_API_KEY: process.env.GEMINI_API_KEY, GEMINI_MODEL: process.env.GEMINI_MODEL }): GradingProvider | null {
   const key = env.GEMINI_API_KEY?.trim();
   if (!key?.trim()) return null;
@@ -168,7 +177,7 @@ export function configuredProvider(env: { GEMINI_API_KEY?: string; GEMINI_MODEL?
     async grade(question, response, strictness = "standard") {
       let result: Response;
       try {
-        result = await fetch(
+        result = await fetchWithUnavailableRetry(
           `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
           {
             method: "POST",
@@ -214,14 +223,16 @@ export function configuredProvider(env: { GEMINI_API_KEY?: string; GEMINI_MODEL?
           },
         );
       } catch (error) {
+        const timedOut = error instanceof Error && ["TimeoutError", "AbortError"].includes(error.name);
         throw new GradingError(
-          error instanceof Error &&
-            ["TimeoutError", "AbortError"].includes(error.name)
+          timedOut
             ? "Gemini timed out. Your response is preserved. Retry or review manually."
             : "Gemini is unreachable. Your response is preserved; manual review is available.",
+          timedOut ? 504 : 502,
         );
       }
-      if (result.status === 402) throw new GradingError("Gemini project credits or quota are exhausted (HTTP 402). Check Google AI Studio billing and project limits before retrying. Your response is preserved; manual review is available.");
+      if (result.status === 402) throw new GradingError("Gemini project credits or quota are exhausted (HTTP 402). Check Google AI Studio billing and project limits before retrying. Your response is preserved; manual review is available.", 402);
+      if (result.status === 503) throw new GradingError("Gemini is temporarily unavailable (HTTP 503). Wait a minute and retry. Your response is preserved; manual review is available.", 503, 60);
       if (result.status === 429)
         throw new GradingError(
           "Gemini’s rate limit was reached. Wait a minute or use manual review.",

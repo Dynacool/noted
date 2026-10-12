@@ -200,8 +200,27 @@ try {
   const limited = await POST(request({ question: q, response }, "limit-test"));
   assert.equal(limited.status, 429);
   assert.equal(limited.headers.get("Retry-After"), "60");
-  globalThis.fetch = async () => new Response("", { status: 402 });
-  await assert.rejects(configuredProvider()!.grade(q, response), /credits or quota/);
+  let calls = 0;
+  globalThis.fetch = async () => { calls++; return new Response("", { status: 402 }); };
+  await assert.rejects(configuredProvider()!.grade(q, response), (e) => e instanceof GradingError && e.status === 402 && /credits or quota/.test(e.message));
+  assert.equal(calls, 1);
+  calls = 0;
+  globalThis.fetch = async () => { calls++; return new Response("", { status: 503 }); };
+  await assert.rejects(configuredProvider()!.grade(q, response), (e) => e instanceof GradingError && e.status === 503 && e.retryAfter === 60 && /temporarily unavailable/.test(e.message));
+  assert.equal(calls, 2);
+  calls = 0;
+  let retrySignal: AbortSignal | null | undefined;
+  globalThis.fetch = async (_input, options) => {
+    calls++;
+    if (calls === 1) {
+      retrySignal = options?.signal;
+      return new Response("", { status: 503 });
+    }
+    assert.equal(options?.signal, retrySignal);
+    return Response.json({ candidates: [{ finishReason: "STOP", content: { parts: [{ text: JSON.stringify(payload) }] } }] });
+  };
+  assert.deepEqual((await configuredProvider()!.grade(q, response)).points, [1]);
+  assert.equal(calls, 2);
   globalThis.fetch = async () => Response.json({ error: { details: [{ reason: "API_KEY_INVALID" }], message: "Secret provider detail" } }, { status: 400 });
   await assert.rejects(configuredProvider()!.grade(q, response), /rejected the server API key/);
   globalThis.fetch = async () => Response.json({ error: { message: "Requires paid tier billing" } }, { status: 400 });
@@ -216,7 +235,7 @@ try {
   globalThis.fetch = async () => {
     throw new DOMException("Timed out", "TimeoutError");
   };
-  await assert.rejects(configuredProvider()!.grade(q, response), /timed out/);
+  await assert.rejects(configuredProvider()!.grade(q, response), (e) => e instanceof GradingError && e.status === 504 && /timed out/.test(e.message));
   globalThis.fetch = async () =>
     Response.json({ candidates: [{ finishReason: "MAX_TOKENS" }] });
   await assert.rejects(
